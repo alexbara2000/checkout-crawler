@@ -1,4 +1,5 @@
 screenshots/
+out/
 logs/*
 !logs/.gitkeep
 
@@ -19,3 +20,5 @@ top-1m.csv
 # IDEA IDEs
 .idea/
 */ignore/*
+
+config.js
