@@ -65,7 +65,7 @@ async function crawl(params) {
         await visit(rows[0]);
 
         //Restart the browser every X pages
-        if (++count % 20 === 0) {
+        if (++count % 10 === 0) {
             await restartBrowser();
         }
     }

@@ -35,63 +35,188 @@ async function seed() {
 
 //Called every time the browser context is restarted
 async function initialize() {
-    console.log("default.initialize");
 }
 
 //Before visiting a new page from the crawling queue
 async function before(params) {
-    console.log("default.before");
 }
 
 //During the visit, after the page has loaded
 async function during(params) {
-    await common.sleep(500);
-
     page = browser.page();
-    // List of potential "Add to Cart" button selectors
-    const addToCartSelectors = [
-        'button.add-to-cart',      // Generic button class
-        'button#add-to-cart',      // ID based
-        'button[name="add-to-cart"]', // Name attribute based
-        'button[aria-label="Add to cart"]', // Accessibility-based labels
-        '.btn-add-to-cart',        // Another common class
-        '.add-to-cart-button',     // Class structure
-        'a[href*="add-to-cart"]',  // Anchor link containing "add-to-cart"
-        'input[value="Add to Cart"]', // Input buttons with value
-        'button[data-action="add-to-cart"]', // Data attributes
-        '[type="submit"][name="add-to-cart"]', // Submit buttons
-        '.product-form button[type="submit"]', // Inside forms
-    ];
-
-    // Function to click the first available "Add to Cart" button
-    let clicked = false;
-
-    for (const selector of addToCartSelectors) {
-        try {
-        const element = await page.waitForSelector(selector, { timeout: 500 }); // Wait for each selector
-        if (element) {
-            console.log(`Found and clicking: ${selector}`);
-            await page.click(selector); // Click the first matching button
-            clicked = true;
-            break;
-        }
-        } catch (error) {
-        console.log(`Selector not found or not clickable: ${selector}`);
-        }
-    }
-
-    if (clicked) {
-        console.log('Item added to cart successfully.');
-        // Optionally wait for a confirmation element (e.g., cart pop-up or message)
-    } else {
-        console.log('Failed to find "Add to Cart" button.');
-    }
-
+    await handleConsentBanner(page, 500)
     let screenshot = await browser.page().screenshot();
-    fs.writeFileSync(`out/${params.pid}-${params.host}.png`, Buffer.from(screenshot, "base64"));
+    fs.writeFileSync(`screenshots/page/${params.pid}-${params.host}.png`, Buffer.from(screenshot, "base64"));
+
+    const addToCartKeywords = ['add to cart', 'add to bag', 'add to basket'];
+    const xpathExpressions = addToCartKeywords.map(keyword => `//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')]`);
+    const originalUrl = page.url();
+    console.log(originalUrl)
+    for (const xpath of xpathExpressions) {
+        // Get all nodes matching the XPath
+        const nodes = await page.evaluate(xpath => {
+            const iterator = document.evaluate(xpath, document, null, XPathResult.UNORDERED_NODE_ITERATOR_TYPE, null);
+            let node = iterator.iterateNext();
+            const nodeArray = [];
+            while (node) {
+            nodeArray.push(node);
+            node = iterator.iterateNext();
+            }
+            return nodeArray.map((node, index) => {
+            // Create a unique selector for each node
+            const uniqueSelector = `//*[@data-unique-id='${index}']`;
+            node.setAttribute('data-unique-id', index);
+            return uniqueSelector;
+            });
+        }, xpath);
+
+        console.log('Found nodes:', nodes);
+
+        // Click on each node and take a screenshot
+        for (let i = 0; i < nodes.length; i++) {
+            // Otherwise too many screenshots
+            if(i >= 6){
+                break;
+            }
+            const uniqueSelector = nodes[i];
+            await page.evaluate(selector => {
+            const node = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+            if (node && node.click) {
+                node.click();
+            }
+            }, uniqueSelector);
+
+            await common.sleep(1000);
+            let screenshot = await browser.page().screenshot();
+            fs.writeFileSync(`screenshots/cart/${params.pid}-${params.host}-${i}.png`, Buffer.from(screenshot, "base64"));
+            if (originalUrl !== page.url()) {
+                await page.goBack();
+            }
+        }
+    }
 }
 
 //After the page was closed, useful for postprocessing and DB operations
 async function after(params) {
-    console.log("default.after");
 }
+
+
+async function handleConsentBanner(page){
+    await common.sleep(500);
+    await page.evaluate(_ => {
+      function xcc_contains(selector, text) {
+          var elements = document.querySelectorAll(selector);
+          return Array.prototype.filter.call(elements, function(element){
+              return RegExp(text, "i").test(element.textContent.trim());
+          });
+      }
+      var _xcc;
+      _xcc = xcc_contains('[id*=cookie] a, [class*=cookie] a, [id*=cookie] button, [class*=cookie] button', '^(Accept all|Accept|I understand|Agree|Okay|OK|Continue)$');
+      if (_xcc != null && _xcc.length != 0) { _xcc[0].click(); }
+    });
+    await common.sleep(500);
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+  // // List of potential "Add to Cart" button selectors
+    // const addToCartSelectors = [
+    //     'button.add-to-cart',      // Generic button class
+    //     'button#add-to-cart',      // ID based
+    //     'button[name="add-to-cart"]', // Name attribute based
+    //     'button[aria-label="Add to cart"]', // Accessibility-based labels
+    //     '.btn-add-to-cart',        // Another common class
+    //     '.add-to-cart-button',     // Class structure
+    //     'a[href*="add-to-cart"]',  // Anchor link containing "add-to-cart"
+    //     'input[value="Add to Cart"]', // Input buttons with value
+    //     'button[data-action="add-to-cart"]', // Data attributes
+    //     '[type="submit"][name="add-to-cart"]', // Submit buttons
+    //     '.product-form button[type="submit"]', // Inside forms
+    // ];
+
+    // // Function to click the first available "Add to Cart" button
+    // let clicked = false;
+
+    // for (const selector of addToCartSelectors) {
+    //     try {
+    //     const element = await page.waitForSelector(selector, { timeout: 300 }); // Wait for each selector
+    //     if (element) {
+    //         console.log(`Found and clicking: ${selector}`);
+    //         await page.click(selector); // Click the first matching button
+    //         clicked = true;
+    //         break;
+    //     }
+    //     } catch (error) {
+    //     console.log(`Selector not found or not clickable: ${selector}`);
+    //     }
+    // }
+
+    // if (clicked) {
+    //     console.log('Item added to cart successfully.');
+    //     // Optionally wait for a confirmation element (e.g., cart pop-up or message)
+    //     await common.sleep(500);
+    //     let screenshot = await browser.page().screenshot();
+    //     fs.writeFileSync(`screenshots/cart/${params.pid}-${params.host}.png`, Buffer.from(screenshot, "base64"));
+    // } else {
+    //     console.log('Failed to find "Add to Cart" button.');
+    // }
+
+
+    // const keywords = ['add to cart', 'buy now', 'add item', 'add', 'buy', 'purchase'];
+
+    // // Function to check if the element contains any of the keywords
+    // async function containsKeyword(element, keywords) {
+    //     const text = await element.evaluate(el => el.textContent?.toLowerCase() || '');
+    //     return keywords.some(keyword => text.includes(keyword));
+    // }
+
+    // // Function to search for potential "Add to Cart" buttons or links
+    // async function findAddToCartButton() {
+    //     const potentialSelectors = [
+    //     'button',             // Look for all buttons
+    //     'a',                  // Look for all anchor links
+    //     'input[type="submit"]' // Look for input buttons with type submit
+    //     ];
+
+    //     for (const selector of potentialSelectors) {
+    //     const elements = await page.$$(selector); // Get all matching elements
+    //     for (const element of elements) {
+    //         // Check if element's text or certain attributes contain relevant keywords
+    //         const matchesText = await containsKeyword(element, keywords);
+    //         const matchesAttribute = await element.evaluate((el, kw) => {
+    //         return kw.some(keyword => (el.getAttribute('aria-label')?.toLowerCase().includes(keyword) ||
+    //             el.getAttribute('value')?.toLowerCase().includes(keyword) ||
+    //             el.getAttribute('data-action')?.toLowerCase().includes(keyword)));
+    //         }, keywords);
+
+    //         if (matchesText || matchesAttribute) {
+    //         console.log(`Found and clicking: ${selector}`);
+    //         // await db.query("INSERT INTO cookies_links VALUES ?", [linkData]);
+    //         await element.click();
+    //         return true; // Return once we've found and clicked a valid element
+    //         }
+    //     }
+    //     }
+    //     return false;
+    // }
+
+    // // Try to find and click the "Add to Cart" button
+    // const clicked = await findAddToCartButton();
+
+    // if (clicked) {
+    //     console.log('Item added to cart successfully.');
+    //     await common.sleep(500);
+    //     let screenshot = await browser.page().screenshot();
+    //     fs.writeFileSync(`out/${params.pid}-${params.host}.png`, Buffer.from(screenshot, "base64"));
+    // } else {
+    //     console.log('Failed to find "Add to Cart" button.');
+    // }
