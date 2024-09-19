@@ -7,6 +7,7 @@ module.exports = {
     use,
     create,
     query,
+    release,
 };
 
 async function initialize(dbName) {
@@ -42,4 +43,8 @@ async function create(table) {
 
 async function query() {
     return db.query(...arguments);
+}
+
+async function release() {
+    await db.end();
 }

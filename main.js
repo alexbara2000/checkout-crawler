@@ -42,6 +42,7 @@ async function main() {
         }
     }
 
+    await db.release();
     log("All done.");
     process.exit();
 }

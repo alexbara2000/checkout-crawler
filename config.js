@@ -7,8 +7,8 @@ const crawlerId = argv["id"] === undefined ? 0 : parseInt(argv["id"], 10) % craw
 const dbName = argv["dbName"]; //Usually set in module itself, but this option can override that
 const dbHost = argv["dbHost"] === undefined ? "127.0.0.1" : argv["dbHost"];
 const dbPort = argv["dbPort"] === undefined ? "3306" : argv["dbPort"];
-const dbUser = argv["dbUser"] === undefined ? "crawler" : argv["dbUser"];
-const dbPass = argv["dbPass"] === undefined ? "YOUR_PASSWORD_HERE" : argv["dbPass"];
+const dbUser = argv["dbUser"] === undefined ? "root" : argv["dbUser"];
+const dbPass = argv["dbPass"] === undefined ? "root" : argv["dbPass"];
 
 const browser = argv["browser"] === undefined ? "chromium" : argv["browser"];
 

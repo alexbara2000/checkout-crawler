@@ -45,6 +45,33 @@ async function before(params) {
 async function during(params) {
     page = browser.page();
     await handleConsentBanner(page, 500)
+    await addToCart(page, params, 0);
+    await goToCheckout(page, params);
+
+}
+
+//After the page was closed, useful for postprocessing and DB operations
+async function after(params) {
+}
+
+
+async function handleConsentBanner(page){
+    await common.sleep(500);
+    await page.evaluate(_ => {
+      function xcc_contains(selector, text) {
+          var elements = document.querySelectorAll(selector);
+          return Array.prototype.filter.call(elements, function(element){
+              return RegExp(text, "i").test(element.textContent.trim());
+          });
+      }
+      var _xcc;
+      _xcc = xcc_contains('[id*=cookie] a, [class*=cookie] a, [id*=cookie] button, [class*=cookie] button', '^(Accept all|Accept|I understand|Agree|Okay|OK|Continue)$');
+      if (_xcc != null && _xcc.length != 0) { _xcc[0].click(); }
+    });
+    await common.sleep(500);
+  }
+
+async function addToCart(page, params, depth){
     let screenshot = await browser.page().screenshot();
     fs.writeFileSync(`screenshots/page/${params.pid}-${params.host}.png`, Buffer.from(screenshot, "base64"));
 
@@ -75,7 +102,7 @@ async function during(params) {
         // Click on each node and take a screenshot
         for (let i = 0; i < nodes.length; i++) {
             // Otherwise too many screenshots
-            if(i >= 6){
+            if(i >= 10-(depth*5)){
                 break;
             }
             const uniqueSelector = nodes[i];
@@ -87,37 +114,85 @@ async function during(params) {
             }, uniqueSelector);
 
             await common.sleep(1000);
-            let screenshot = await browser.page().screenshot();
-            fs.writeFileSync(`screenshots/cart/${params.pid}-${params.host}-${i}.png`, Buffer.from(screenshot, "base64"));
+
+            // let screenshot = await browser.page().screenshot();
+            // fs.writeFileSync(`screenshots/cart/${params.pid}-${params.host}-${i}.png`, Buffer.from(screenshot, "base64"));
             if (originalUrl !== page.url()) {
+                if (depth == 0){
+                    addToCart(page, params, 1);
+                }
+                // await goToCheckout(page, params);
                 await page.goBack();
+                break;
             }
         }
     }
 }
 
-//After the page was closed, useful for postprocessing and DB operations
-async function after(params) {
+async function goToCheckout(page, params){
+    const checkoutKeywords = ["Checkout", "Buy Now", "Proceed", "Place Order", "Complete Purchase"];
+    const xpathExpressions = checkoutKeywords.map(keyword => `//*[
+        contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}') 
+        or contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')
+        or contains(translate(@title, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')
+        or contains(translate(@alt, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')
+        or contains(translate(@id, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')
+        or contains(translate(@class, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')
+    ]`);
+    const originalUrl = page.url();
+    console.log(originalUrl)
+    for (const xpath of xpathExpressions) {
+        // Get all nodes matching the XPath
+        const nodes = await page.evaluate(xpath => {
+            const iterator = document.evaluate(xpath, document, null, XPathResult.UNORDERED_NODE_ITERATOR_TYPE, null);
+            let node = iterator.iterateNext();
+            const nodeArray = [];
+            while (node) {
+            nodeArray.push(node);
+            node = iterator.iterateNext();
+            }
+            return nodeArray.map((node, index) => {
+            // Create a unique selector for each node
+            const uniqueSelector = `//*[@data-unique-id='${index}']`;
+            node.setAttribute('data-unique-id', index);
+            return uniqueSelector;
+            });
+        }, xpath);
+
+        console.log('Found nodes:', nodes);
+
+        // Click on each node and take a screenshot
+        for (let i = 0; i < nodes.length; i++) {
+            if(i >= 10){
+                break;
+            }
+            const uniqueSelector = nodes[i];
+            await page.evaluate(selector => {
+            const node = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+            console.log(node)
+            if (node && node.click) {
+                node.click();
+            }
+            }, uniqueSelector);
+
+            await common.sleep(1000);
+            if (originalUrl !== page.url()) {
+                await common.sleep(3000);
+                let screenshot = await browser.page().screenshot();
+                fs.writeFileSync(`screenshots/checkout/${params.pid}-${params.host}-${i}.png`, Buffer.from(screenshot, "base64"));
+                await markAsDone(params);
+
+                // await page.goBack();
+                break;
+            }
+        }
+    }
+
 }
 
-
-async function handleConsentBanner(page){
-    await common.sleep(500);
-    await page.evaluate(_ => {
-      function xcc_contains(selector, text) {
-          var elements = document.querySelectorAll(selector);
-          return Array.prototype.filter.call(elements, function(element){
-              return RegExp(text, "i").test(element.textContent.trim());
-          });
-      }
-      var _xcc;
-      _xcc = xcc_contains('[id*=cookie] a, [class*=cookie] a, [id*=cookie] button, [class*=cookie] button', '^(Accept all|Accept|I understand|Agree|Okay|OK|Continue)$');
-      if (_xcc != null && _xcc.length != 0) { _xcc[0].click(); }
-    });
-    await common.sleep(500);
-  }
-
-
+async function markAsDone(params){
+    await db.query("UPDATE pages SET status = 1 WHERE status = 0 AND host = ?", [params.host]);
+}
 
 
 
