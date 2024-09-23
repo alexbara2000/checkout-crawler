@@ -46,7 +46,7 @@ async function during(params) {
     page = browser.page();
     await handleConsentBanner(page, 500)
     await addToCart(page, params, 0);
-    await goToCheckout(page, params);
+    await goToCheckout(page, params, 0);
 
 }
 
@@ -56,7 +56,7 @@ async function after(params) {
 
 
 async function handleConsentBanner(page){
-    await common.sleep(500);
+    await common.sleep(1500);
     await page.evaluate(_ => {
       function xcc_contains(selector, text) {
           var elements = document.querySelectorAll(selector);
@@ -72,11 +72,16 @@ async function handleConsentBanner(page){
   }
 
 async function addToCart(page, params, depth){
-    let screenshot = await browser.page().screenshot();
-    fs.writeFileSync(`screenshots/page/${params.pid}-${params.host}.png`, Buffer.from(screenshot, "base64"));
+    // let screenshot = await browser.page().screenshot();
+    // fs.writeFileSync(`screenshots/page/${params.pid}-${params.host}.png`, Buffer.from(screenshot, "base64"));
 
     const addToCartKeywords = ['add to cart', 'add to bag', 'add to basket'];
-    const xpathExpressions = addToCartKeywords.map(keyword => `//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')]`);
+    const xpathExpressions = addToCartKeywords.map(keyword => `//*[self::a or self::button or self::input or self::span or self::div or self::label]
+        [
+            contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')
+            or contains(translate(@value, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')
+        ]
+        `);
     const originalUrl = page.url();
     console.log(originalUrl)
     for (const xpath of xpathExpressions) {
@@ -129,15 +134,20 @@ async function addToCart(page, params, depth){
     }
 }
 
-async function goToCheckout(page, params){
-    const checkoutKeywords = ["Checkout", "Buy Now", "Proceed", "Place Order", "Complete Purchase"];
-    const xpathExpressions = checkoutKeywords.map(keyword => `//*[
-        contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}') 
+async function goToCheckout(page, params, depth){
+    // await common.sleep(4000);
+    await common.sleep(2000);
+    //removed buy now
+    const checkoutKeywords = ["Checkout", "Check out", "Proceed", "Place Order", "Complete Purchase"];
+    const xpathExpressions = checkoutKeywords.map(keyword => `//*[self::a or self::button or self::input or self::span or self::div or self::label]
+    [
+        contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')
         or contains(translate(@aria-label, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')
         or contains(translate(@title, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')
         or contains(translate(@alt, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')
         or contains(translate(@id, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')
         or contains(translate(@class, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')
+        or contains(translate(@value, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')
     ]`);
     const originalUrl = page.url();
     console.log(originalUrl)
@@ -153,8 +163,8 @@ async function goToCheckout(page, params){
             }
             return nodeArray.map((node, index) => {
             // Create a unique selector for each node
-            const uniqueSelector = `//*[@data-unique-id='${index}']`;
-            node.setAttribute('data-unique-id', index);
+            const uniqueSelector = `//*[@data-unique-id-ck='${index}']`;
+            node.setAttribute('data-unique-id-ck', index);
             return uniqueSelector;
             });
         }, xpath);
@@ -175,15 +185,22 @@ async function goToCheckout(page, params){
             }
             }, uniqueSelector);
 
-            await common.sleep(1000);
-            if (originalUrl !== page.url()) {
+            // await common.sleep(8000);
+            await common.sleep(2000);
+            if (originalUrl !== page.url() && page.url() !== "https://" + params.host + "/" && page.url() !== "http://" + params.host + "/") {
+                console.log(page.url());
                 await common.sleep(3000);
                 let screenshot = await browser.page().screenshot();
                 fs.writeFileSync(`screenshots/checkout/${params.pid}-${params.host}-${i}.png`, Buffer.from(screenshot, "base64"));
                 await markAsDone(params);
-
+                if (depth == 0){
+                    await goToCheckout(page, params,1);
+                }
                 // await page.goBack();
                 break;
+            }
+            if(page.url() == "https://" + params.host + "/" || page.url() == "http://" + params.host + "/"){
+                await page.goBack();
             }
         }
     }
@@ -191,6 +208,8 @@ async function goToCheckout(page, params){
 }
 
 async function markAsDone(params){
+    console.log("***")
+    console.log(params.host)
     await db.query("UPDATE pages SET status = 1 WHERE status = 0 AND host = ?", [params.host]);
 }
 

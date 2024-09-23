@@ -197,6 +197,20 @@ async function extractLinks(params) {
             entries.push({url: link, root: params.root, depth: params.depth + 1});
         }
     }
+    if (params.depth == 1){
+        entries.sort((a, b) => {
+            const containsCollectionA = a.url.includes('collection');
+            const containsCollectionB = b.url.includes('collection');
+            
+            if (containsCollectionA && !containsCollectionB) {
+              return 1; // a should come after b
+            } else if (!containsCollectionA && containsCollectionB) {
+              return -1; // a should come before b
+            }
+            
+            return 0; // keep the same order if both are equal
+        });
+    }
     return entries;
 }
 
@@ -210,7 +224,7 @@ async function addUrls(entries) {
     if (options.maxLinks > 0) {
         //XXX Assumes that we never add URLs for multiple different roots at the same time
         let [rows] = await db.query("SELECT hash FROM pages WHERE root = ?", [entries[0].root]);
-        if (rows.length > options.maxLinks + 1) {
+        if (rows.length > options.maxLinks*2) {
             return;
         }
         for (let row of rows) {
@@ -219,6 +233,7 @@ async function addUrls(entries) {
     }
 
     let data = [];
+    // console.log(entries);
     for (let entry of entries) {
         let url = common.parseUrl(entry.url);
         //Skip if we added this url before
