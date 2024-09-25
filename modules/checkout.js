@@ -7,7 +7,8 @@ const fs = require("fs");
 
 const event = common.event;
 const options = {
-    browser: {},
+    browser: {args: ['--no-sandbox', '--disable-setuid-sandbox',
+        '--load-extension=consent-o-matic',]},
     context: {},
     crawler: {maxDepth: 2, maxLinks: 10, randomizeLinks: true, maxRetries: 2, sameSite: false, depthFirst: true,},
     seed: {list: "shop.csv", pageLimit: 10000},
@@ -75,7 +76,7 @@ async function addToCart(page, params, depth){
     // let screenshot = await browser.page().screenshot();
     // fs.writeFileSync(`screenshots/page/${params.pid}-${params.host}.png`, Buffer.from(screenshot, "base64"));
 
-    const addToCartKeywords = ['add to cart', 'add to bag', 'add to basket'];
+    const addToCartKeywords = ['add to cart', 'add to bag', 'add to basket', 'add to tote', 'add -'];
     const xpathExpressions = addToCartKeywords.map(keyword => `//*[self::a or self::button or self::input or self::span or self::div or self::label]
         [
             contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')
@@ -84,6 +85,8 @@ async function addToCart(page, params, depth){
         `);
     const originalUrl = page.url();
     console.log(originalUrl)
+
+    var shouldLookAtAdd=true;
     for (const xpath of xpathExpressions) {
         // Get all nodes matching the XPath
         const nodes = await page.evaluate(xpath => {
@@ -102,10 +105,16 @@ async function addToCart(page, params, depth){
             });
         }, xpath);
 
+        if (nodes.length > 0) {
+            shouldLookAtAdd=false;
+        }
         console.log('Found nodes:', nodes);
 
         // Click on each node and take a screenshot
         for (let i = 0; i < nodes.length; i++) {
+            if (i == nodes.length-1 && !shouldLookAtAdd){
+                break;
+            }
             // Otherwise too many screenshots
             if(i >= 10-(depth*5)){
                 break;
@@ -122,7 +131,7 @@ async function addToCart(page, params, depth){
 
             // let screenshot = await browser.page().screenshot();
             // fs.writeFileSync(`screenshots/cart/${params.pid}-${params.host}-${i}.png`, Buffer.from(screenshot, "base64"));
-            if (originalUrl !== page.url()) {
+            if (originalUrl !== page.url().split("&")[0]) {
                 if (depth == 0){
                     addToCart(page, params, 1);
                 }
@@ -187,7 +196,7 @@ async function goToCheckout(page, params, depth){
 
             // await common.sleep(8000);
             await common.sleep(2000);
-            if (originalUrl !== page.url() && page.url() !== "https://" + params.host + "/" && page.url() !== "http://" + params.host + "/") {
+            if (originalUrl !== page.url() && page.url() !== "https://" + params.host + "/" && page.url() !== "http://" + params.host + "/" && page.url() !== "about:blank") {
                 console.log(page.url());
                 await common.sleep(3000);
                 let screenshot = await browser.page().screenshot();
@@ -202,6 +211,9 @@ async function goToCheckout(page, params, depth){
             if(page.url() == "https://" + params.host + "/" || page.url() == "http://" + params.host + "/"){
                 await page.goBack();
             }
+            // if(page.url() !== "about:blank"){
+            //     await page.goForward();
+            // }
         }
     }
 

@@ -154,9 +154,9 @@ async function visit(params) {
             "UPDATE pages SET status = ?, finished = ?, message = ? WHERE pid = ?",
             [status, common.timestamp(), message, params.pid]
         );
-        if (error.message.includes("Target page, context or browser has been closed")) {
+        // if (error.message.includes("Target page, context or browser has been closed")) {
             await restartBrowser();
-        }
+        // }
         //Notify all modules about the error for possible clean-up steps
         params.error = error;
         await callAll("abort", params);
@@ -193,7 +193,10 @@ async function extractLinks(params) {
         let parsedLink = common.parseUrl(link);
         //Check if in scope. Either exactly same domain as after the redirect,
         //or on the same site (sub-, parent- oder sibling domain)
-        if (parsedLink.host == params.destination.host || (options.sameSite && common.sameSite(parsedLink, params.destination))) {
+        if (parsedLink.host == params.destination.host || (options.sameSite && common.sameSite(parsedLink, params.destination)) || parsedLink.host == params.host || parsedLink.host == "www."+params.host) {
+            entries.push({url: link, root: params.root, depth: params.depth + 1});
+        }
+        else if (parsedLink.host.split('.').length -1 == 2 && params.destination.host.split('.').length -1 == 2 && parsedLink.host.split('.')[1] == params.destination.host.split('.')[1] && parsedLink.host.split('.')[2] == params.destination.host.split('.')[2]){
             entries.push({url: link, root: params.root, depth: params.depth + 1});
         }
     }
