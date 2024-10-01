@@ -45,7 +45,8 @@ async function before(params) {
 //During the visit, after the page has loaded
 async function during(params) {
     page = browser.page();
-    await handleConsentBanner(page, 500)
+    await handleConsentBanner(page, 500);
+    await selectSize(page, params);
     await addToCart(page, params, 0);
     await goToCheckout(page, params, 0);
 
@@ -72,15 +73,16 @@ async function handleConsentBanner(page){
     await common.sleep(500);
   }
 
-async function addToCart(page, params, depth){
+
+  async function selectSize(page, params){
     // let screenshot = await browser.page().screenshot();
     // fs.writeFileSync(`screenshots/page/${params.pid}-${params.host}.png`, Buffer.from(screenshot, "base64"));
 
-    const addToCartKeywords = ['add to cart', 'add to bag', 'add to basket', 'add to tote', 'add -'];
+    const addToCartKeywords = ['l', 'large', '10'];
     const xpathExpressions = addToCartKeywords.map(keyword => `//*[self::a or self::button or self::input or self::span or self::div or self::label]
         [
-            contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')
-            or contains(translate(@value, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')
+            translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', 'abcdefghijklmnopqrstuvwxyz0123456789') = '${keyword.toLowerCase()}'
+            or translate(@value, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', 'abcdefghijklmnopqrstuvwxyz0123456789') = '${keyword.toLowerCase()}'
         ]
         `);
     const originalUrl = page.url();
@@ -99,20 +101,84 @@ async function addToCart(page, params, depth){
             }
             return nodeArray.map((node, index) => {
             // Create a unique selector for each node
-            const uniqueSelector = `//*[@data-unique-id='${index}']`;
-            node.setAttribute('data-unique-id', index);
+            const uniqueSelector = `//*[@data-unique-id-size='${index}']`;
+            node.setAttribute('data-unique-id-size', index);
             return uniqueSelector;
             });
         }, xpath);
-
-        if (nodes.length > 0) {
-            shouldLookAtAdd=false;
-        }
         console.log('Found nodes:', nodes);
+
 
         // Click on each node and take a screenshot
         for (let i = 0; i < nodes.length; i++) {
-            if (i == nodes.length-1 && !shouldLookAtAdd){
+            // Otherwise too many screenshots
+            if(i >= 10 || !shouldLookAtAdd){
+                break;
+            }
+            const uniqueSelector = nodes[i];
+            await page.evaluate(selector => {
+            const node = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+            if (node && node.click) {
+                node.click();
+            }
+            }, uniqueSelector);
+
+            await common.sleep(1000);
+
+            let screenshot = await browser.page().screenshot();
+            fs.writeFileSync(`screenshots/cart/${params.pid}-${params.host}-${i}.png`, Buffer.from(screenshot, "base64"));
+            console.log(page.url());
+            if(page.url())
+            if (originalUrl !== page.url().split("&")[0] && originalUrl !== page.url().split("?")[0]) {
+                await page.goBack();
+                break;
+            }
+        }
+        if(nodes.length > 0){
+            shouldLookAtAdd=false;
+        }
+    }
+}
+
+async function addToCart(page, params, depth){
+    // let screenshot = await browser.page().screenshot();
+    // fs.writeFileSync(`screenshots/page/${params.pid}-${params.host}.png`, Buffer.from(screenshot, "base64"));
+
+    const addToCartKeywords = ['add to cart', 'add to bag', 'add to basket', 'add to tote', 'add -'];
+    const xpathExpressions = addToCartKeywords.map(keyword => `//*[self::a or self::button or self::input or self::span or self::div or self::label]
+        [
+            contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')
+            or contains(translate(@value, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '${keyword.toLowerCase()}')
+        ]
+        `);
+    const originalUrl = page.url();
+    console.log(originalUrl)
+
+    var shouldLookAtAdd=true;
+    let j=0;
+    for (const xpath of xpathExpressions) {
+        // Get all nodes matching the XPath
+        const nodes = await page.evaluate(({xpath, j}) => {
+            const iterator = document.evaluate(xpath, document, null, XPathResult.UNORDERED_NODE_ITERATOR_TYPE, null);
+            let node = iterator.iterateNext();
+            const nodeArray = [];
+            while (node) {
+            nodeArray.push(node);
+            node = iterator.iterateNext();
+            }
+            return nodeArray.map((node, index) => {
+            // Create a unique selector for each node
+            const uniqueSelector = `//*[@data-unique-id-${j}='${index}']`;
+            node.setAttribute(`data-unique-id-${j}`, index);
+            return uniqueSelector;
+            });
+        }, {xpath,j});
+        console.log('Found nodes:', nodes);
+        j++;
+
+        // Click on each node and take a screenshot
+        for (let i = 0; i < nodes.length; i++) {
+            if (!shouldLookAtAdd){
                 break;
             }
             // Otherwise too many screenshots
@@ -137,8 +203,14 @@ async function addToCart(page, params, depth){
                 }
                 // await goToCheckout(page, params);
                 await page.goBack();
+                if(page.url() == "about:blank"){
+                    await page.goForward();
+                }
                 break;
             }
+        }
+        if (nodes.length > 0) {
+            shouldLookAtAdd=false;
         }
     }
 }
@@ -160,9 +232,10 @@ async function goToCheckout(page, params, depth){
     ]`);
     const originalUrl = page.url();
     console.log(originalUrl)
+    let j=0;
     for (const xpath of xpathExpressions) {
         // Get all nodes matching the XPath
-        const nodes = await page.evaluate(xpath => {
+        const nodes = await page.evaluate(({xpath, j}) => {
             const iterator = document.evaluate(xpath, document, null, XPathResult.UNORDERED_NODE_ITERATOR_TYPE, null);
             let node = iterator.iterateNext();
             const nodeArray = [];
@@ -172,12 +245,12 @@ async function goToCheckout(page, params, depth){
             }
             return nodeArray.map((node, index) => {
             // Create a unique selector for each node
-            const uniqueSelector = `//*[@data-unique-id-ck='${index}']`;
-            node.setAttribute('data-unique-id-ck', index);
+            const uniqueSelector = `//*[@data-unique-id-ck-${j}='${index}']`;
+            node.setAttribute(`data-unique-id-ck-${j}`, index);
             return uniqueSelector;
             });
-        }, xpath);
-
+        }, {xpath,j});
+        j++;
         console.log('Found nodes:', nodes);
 
         // Click on each node and take a screenshot
@@ -208,15 +281,15 @@ async function goToCheckout(page, params, depth){
                 // await page.goBack();
                 break;
             }
+            // console.log(page.url());
             if(page.url() == "https://" + params.host + "/" || page.url() == "http://" + params.host + "/"){
                 await page.goBack();
             }
-            // if(page.url() !== "about:blank"){
-            //     await page.goForward();
-            // }
+            if(page.url() == "about:blank"){
+                await page.goForward();
+            }
         }
     }
-
 }
 
 async function markAsDone(params){
