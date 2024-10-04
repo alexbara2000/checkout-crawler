@@ -7,11 +7,11 @@ const fs = require("fs");
 
 const event = common.event;
 const options = {
-    browser: {args: ['--no-sandbox', '--disable-setuid-sandbox',
+    browser: {args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-extensions-except=consent-o-matic',
         '--load-extension=consent-o-matic',]},
     context: {},
-    crawler: {maxDepth: 2, maxLinks: 10, randomizeLinks: true, maxRetries: 2, sameSite: false, depthFirst: true,},
-    seed: {list: "shop.csv", pageLimit: 10000},
+    crawler: {maxDepth: 3, maxLinks: 10, randomizeLinks: true, maxRetries: 2, sameSite: false, depthFirst: true,},
+    seed: {list: "top100.csv", pageLimit: 100000},
 };
 
 module.exports = {
@@ -44,34 +44,21 @@ async function before(params) {
 
 //During the visit, after the page has loaded
 async function during(params) {
+    let foundCheckout = false;
     page = browser.page();
-    await handleConsentBanner(page, 500);
-    await selectSize(page, params);
-    await addToCart(page, params, 0);
-    await goToCheckout(page, params, 0);
+    // await selectSize(page, params);
+    let numAddedToCart = await addToCart(page, params, 0);
+    if(numAddedToCart > 0) {
+        foundCheckout = await goToCheckout(page, params, 0);
+    }
+    // await goToCheckout(page, params, 0);
+    return {pageFound: foundCheckout};
 
 }
 
 //After the page was closed, useful for postprocessing and DB operations
 async function after(params) {
 }
-
-
-async function handleConsentBanner(page){
-    await common.sleep(1500);
-    await page.evaluate(_ => {
-      function xcc_contains(selector, text) {
-          var elements = document.querySelectorAll(selector);
-          return Array.prototype.filter.call(elements, function(element){
-              return RegExp(text, "i").test(element.textContent.trim());
-          });
-      }
-      var _xcc;
-      _xcc = xcc_contains('[id*=cookie] a, [class*=cookie] a, [id*=cookie] button, [class*=cookie] button', '^(Accept all|Accept|I understand|Agree|Okay|OK|Continue)$');
-      if (_xcc != null && _xcc.length != 0) { _xcc[0].click(); }
-    });
-    await common.sleep(500);
-  }
 
 
   async function selectSize(page, params){
@@ -88,10 +75,11 @@ async function handleConsentBanner(page){
     const originalUrl = page.url();
     console.log(originalUrl)
 
-    var shouldLookAtAdd=true;
+    var shouldLookAtMore=true;
+    let j=0;
     for (const xpath of xpathExpressions) {
         // Get all nodes matching the XPath
-        const nodes = await page.evaluate(xpath => {
+        const nodes = await page.evaluate(({xpath, j}) => {
             const iterator = document.evaluate(xpath, document, null, XPathResult.UNORDERED_NODE_ITERATOR_TYPE, null);
             let node = iterator.iterateNext();
             const nodeArray = [];
@@ -101,18 +89,19 @@ async function handleConsentBanner(page){
             }
             return nodeArray.map((node, index) => {
             // Create a unique selector for each node
-            const uniqueSelector = `//*[@data-unique-id-size='${index}']`;
-            node.setAttribute('data-unique-id-size', index);
+            const uniqueSelector = `//*[@data-unique-id-size-${j}='${index}']`;
+            node.setAttribute(`data-unique-id-size-${j}`, index);
             return uniqueSelector;
             });
-        }, xpath);
+        }, {xpath,j});
         console.log('Found nodes:', nodes);
+        j++;
 
 
         // Click on each node and take a screenshot
         for (let i = 0; i < nodes.length; i++) {
             // Otherwise too many screenshots
-            if(i >= 10 || !shouldLookAtAdd){
+            if(i >= 10 || !shouldLookAtMore){
                 break;
             }
             const uniqueSelector = nodes[i];
@@ -125,8 +114,8 @@ async function handleConsentBanner(page){
 
             await common.sleep(1000);
 
-            let screenshot = await browser.page().screenshot();
-            fs.writeFileSync(`screenshots/cart/${params.pid}-${params.host}-${i}.png`, Buffer.from(screenshot, "base64"));
+            // let screenshot = await browser.page().screenshot();
+            // fs.writeFileSync(`screenshots/cart/${params.pid}-${params.host}-${i}.png`, Buffer.from(screenshot, "base64"));
             console.log(page.url());
             if(page.url())
             if (originalUrl !== page.url().split("&")[0] && originalUrl !== page.url().split("?")[0]) {
@@ -135,10 +124,68 @@ async function handleConsentBanner(page){
             }
         }
         if(nodes.length > 0){
-            shouldLookAtAdd=false;
+            shouldLookAtMore=false;
         }
     }
 }
+
+async function findClickableElements(page){
+    const cartKeywords = ['cart', 'bag', 'shopping-cart', 'my-bag', 'basket'];
+    const clickableElements = await page.evaluate((cartKeywords) => {
+      const elements = Array.from(document.querySelectorAll(`a,span,button,div`));
+      return elements
+        .filter(element => {
+          const text = element.textContent || '';
+          const href = element.href || '';
+          const onclick = element.getAttribute('onclick') || '';
+          return cartKeywords.some(keyword =>
+            text.includes(keyword) ||
+            href.includes(keyword) ||
+            onclick.includes(keyword)
+          );
+        })
+        .map(element => ({
+          tag: element.tagName.toLowerCase(),
+          href: element.href || null,
+          text: element.textContent.trim().length>= 100? '': element.textContent.trim(),
+          onclick: element.getAttribute('onclick') || null,
+          id: element.id
+        }));
+    }, cartKeywords);
+    return clickableElements;
+  }
+
+async function viewCart(page, params){
+    // let screenshot = await browser.page().screenshot();
+    // fs.writeFileSync(`screenshots/page/${params.pid}-${params.host}.png`, Buffer.from(screenshot, "base64"));
+    let foundCheckout = false;
+    const originalUrl = page.url();
+    const clickableElements = await findClickableElements(page)
+    clickableElements.sort((a, b) => {
+        const lengthA = a.href ? a.href.length : 0;
+        const lengthB = b.href ? b.href.length: 0;
+        return lengthA - lengthB;
+      });
+
+    seenUrls = [];
+    let i=0;
+    for (const elem of clickableElements) {
+        if(elem.href != null && !seenUrls.includes(elem.href)){
+            if (i>=4){
+                break;
+            }
+            seenUrls.push(elem.href);
+            await page.goto(elem.href);
+            if (originalUrl !== page.url().split("&")[0] && originalUrl !== page.url().split("?")[0]) {
+                i++;
+                foundCheckout ||= await goToCheckout(page, params, 0);
+                await page.goBack();
+            }
+        }
+      }
+      return foundCheckout;
+}
+
 
 async function addToCart(page, params, depth){
     // let screenshot = await browser.page().screenshot();
@@ -156,6 +203,7 @@ async function addToCart(page, params, depth){
 
     var shouldLookAtAdd=true;
     let j=0;
+    let totalNodesFound=0;
     for (const xpath of xpathExpressions) {
         // Get all nodes matching the XPath
         const nodes = await page.evaluate(({xpath, j}) => {
@@ -174,6 +222,7 @@ async function addToCart(page, params, depth){
             });
         }, {xpath,j});
         console.log('Found nodes:', nodes);
+        totalNodesFound+=nodes.length;
         j++;
 
         // Click on each node and take a screenshot
@@ -197,7 +246,7 @@ async function addToCart(page, params, depth){
 
             // let screenshot = await browser.page().screenshot();
             // fs.writeFileSync(`screenshots/cart/${params.pid}-${params.host}-${i}.png`, Buffer.from(screenshot, "base64"));
-            if (originalUrl !== page.url().split("&")[0]) {
+            if (originalUrl !== page.url().split("&")[0] && originalUrl.split("?")[0]!== page.url().split("?")[0]) {
                 if (depth == 0){
                     addToCart(page, params, 1);
                 }
@@ -213,6 +262,7 @@ async function addToCart(page, params, depth){
             shouldLookAtAdd=false;
         }
     }
+    return totalNodesFound;
 }
 
 async function goToCheckout(page, params, depth){
@@ -233,6 +283,8 @@ async function goToCheckout(page, params, depth){
     const originalUrl = page.url();
     console.log(originalUrl)
     let j=0;
+    let nodesWithLengths=[];
+    let foundCheckout = false;
     for (const xpath of xpathExpressions) {
         // Get all nodes matching the XPath
         const nodes = await page.evaluate(({xpath, j}) => {
@@ -243,53 +295,68 @@ async function goToCheckout(page, params, depth){
             nodeArray.push(node);
             node = iterator.iterateNext();
             }
+             // Function to get cumulative length of the relevant attributes
+            const getLength = (node) => {
+                const textLength = (node.textContent || '').trim().length;
+                const ariaLabelLength = (node.getAttribute('aria-label') || '').trim().length;
+                const titleLength = (node.getAttribute('title') || '').trim().length;
+                const altLength = (node.getAttribute('alt') || '').trim().length;
+                const idLength = (node.getAttribute('id') || '').trim().length;
+                const classLength = (node.getAttribute('class') || '').trim().length;
+                const valueLength = (node.getAttribute('value') || '').trim().length;
+
+                return textLength + ariaLabelLength + titleLength + altLength + idLength + classLength + valueLength;
+            };
+
             return nodeArray.map((node, index) => {
             // Create a unique selector for each node
             const uniqueSelector = `//*[@data-unique-id-ck-${j}='${index}']`;
             node.setAttribute(`data-unique-id-ck-${j}`, index);
-            return uniqueSelector;
+            return [uniqueSelector, getLength(node)];
             });
         }, {xpath,j});
         j++;
         console.log('Found nodes:', nodes);
+        nodesWithLengths=nodesWithLengths.concat(nodes);
+    }
+    nodesWithLengths.sort((a, b) => a[1] - b[1]);
+    // Click on each node and take a screenshot
+    for (let i = 0; i < nodesWithLengths.length; i++) {
+        if(i >= 10){
+            break;
+        }
+        const uniqueSelector = nodesWithLengths[i][0];
+        await page.evaluate(selector => {
+        const node = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+        console.log(node)
+        if (node && node.click) {
+            node.click();
+        }
+        }, uniqueSelector);
 
-        // Click on each node and take a screenshot
-        for (let i = 0; i < nodes.length; i++) {
-            if(i >= 10){
-                break;
+        await common.sleep(3000);
+        if (originalUrl !== page.url() && page.url() !== "https://" + params.host + "/" && page.url() !== "http://" + params.host + "/" && page.url() !== "about:blank") {
+            foundCheckout=true;
+            console.log(page.url());
+            await common.sleep(3000);
+            let screenshot = await browser.page().screenshot();
+            fs.writeFileSync(`screenshots/checkout/simple/${params.pid}-${params.host}-${i}.png`, Buffer.from(screenshot, "base64"));
+            await markAsDone(params);
+            if (depth == 0){
+                await goToCheckout(page, params,1);
             }
-            const uniqueSelector = nodes[i];
-            await page.evaluate(selector => {
-            const node = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-            console.log(node)
-            if (node && node.click) {
-                node.click();
-            }
-            }, uniqueSelector);
-
-            // await common.sleep(8000);
-            await common.sleep(2000);
-            if (originalUrl !== page.url() && page.url() !== "https://" + params.host + "/" && page.url() !== "http://" + params.host + "/" && page.url() !== "about:blank") {
-                console.log(page.url());
-                await common.sleep(3000);
-                let screenshot = await browser.page().screenshot();
-                fs.writeFileSync(`screenshots/checkout/${params.pid}-${params.host}-${i}.png`, Buffer.from(screenshot, "base64"));
-                await markAsDone(params);
-                if (depth == 0){
-                    await goToCheckout(page, params,1);
-                }
-                // await page.goBack();
-                break;
-            }
-            // console.log(page.url());
-            if(page.url() == "https://" + params.host + "/" || page.url() == "http://" + params.host + "/"){
-                await page.goBack();
-            }
-            if(page.url() == "about:blank"){
-                await page.goForward();
-            }
+            // await page.goBack();
+            break;
+        }
+        // console.log(page.url());
+        if(page.url() == "https://" + params.host + "/" || page.url() == "http://" + params.host + "/"){
+            await page.goBack();
+        }
+        if(page.url() == "about:blank"){
+            await page.goForward();
         }
     }
+    return foundCheckout;
 }
 
 async function markAsDone(params){
@@ -297,105 +364,3 @@ async function markAsDone(params){
     console.log(params.host)
     await db.query("UPDATE pages SET status = 1 WHERE status = 0 AND host = ?", [params.host]);
 }
-
-
-
-
-
-
-
-
-
-
-  // // List of potential "Add to Cart" button selectors
-    // const addToCartSelectors = [
-    //     'button.add-to-cart',      // Generic button class
-    //     'button#add-to-cart',      // ID based
-    //     'button[name="add-to-cart"]', // Name attribute based
-    //     'button[aria-label="Add to cart"]', // Accessibility-based labels
-    //     '.btn-add-to-cart',        // Another common class
-    //     '.add-to-cart-button',     // Class structure
-    //     'a[href*="add-to-cart"]',  // Anchor link containing "add-to-cart"
-    //     'input[value="Add to Cart"]', // Input buttons with value
-    //     'button[data-action="add-to-cart"]', // Data attributes
-    //     '[type="submit"][name="add-to-cart"]', // Submit buttons
-    //     '.product-form button[type="submit"]', // Inside forms
-    // ];
-
-    // // Function to click the first available "Add to Cart" button
-    // let clicked = false;
-
-    // for (const selector of addToCartSelectors) {
-    //     try {
-    //     const element = await page.waitForSelector(selector, { timeout: 300 }); // Wait for each selector
-    //     if (element) {
-    //         console.log(`Found and clicking: ${selector}`);
-    //         await page.click(selector); // Click the first matching button
-    //         clicked = true;
-    //         break;
-    //     }
-    //     } catch (error) {
-    //     console.log(`Selector not found or not clickable: ${selector}`);
-    //     }
-    // }
-
-    // if (clicked) {
-    //     console.log('Item added to cart successfully.');
-    //     // Optionally wait for a confirmation element (e.g., cart pop-up or message)
-    //     await common.sleep(500);
-    //     let screenshot = await browser.page().screenshot();
-    //     fs.writeFileSync(`screenshots/cart/${params.pid}-${params.host}.png`, Buffer.from(screenshot, "base64"));
-    // } else {
-    //     console.log('Failed to find "Add to Cart" button.');
-    // }
-
-
-    // const keywords = ['add to cart', 'buy now', 'add item', 'add', 'buy', 'purchase'];
-
-    // // Function to check if the element contains any of the keywords
-    // async function containsKeyword(element, keywords) {
-    //     const text = await element.evaluate(el => el.textContent?.toLowerCase() || '');
-    //     return keywords.some(keyword => text.includes(keyword));
-    // }
-
-    // // Function to search for potential "Add to Cart" buttons or links
-    // async function findAddToCartButton() {
-    //     const potentialSelectors = [
-    //     'button',             // Look for all buttons
-    //     'a',                  // Look for all anchor links
-    //     'input[type="submit"]' // Look for input buttons with type submit
-    //     ];
-
-    //     for (const selector of potentialSelectors) {
-    //     const elements = await page.$$(selector); // Get all matching elements
-    //     for (const element of elements) {
-    //         // Check if element's text or certain attributes contain relevant keywords
-    //         const matchesText = await containsKeyword(element, keywords);
-    //         const matchesAttribute = await element.evaluate((el, kw) => {
-    //         return kw.some(keyword => (el.getAttribute('aria-label')?.toLowerCase().includes(keyword) ||
-    //             el.getAttribute('value')?.toLowerCase().includes(keyword) ||
-    //             el.getAttribute('data-action')?.toLowerCase().includes(keyword)));
-    //         }, keywords);
-
-    //         if (matchesText || matchesAttribute) {
-    //         console.log(`Found and clicking: ${selector}`);
-    //         // await db.query("INSERT INTO cookies_links VALUES ?", [linkData]);
-    //         await element.click();
-    //         return true; // Return once we've found and clicked a valid element
-    //         }
-    //     }
-    //     }
-    //     return false;
-    // }
-
-    // // Try to find and click the "Add to Cart" button
-    // const clicked = await findAddToCartButton();
-
-    // if (clicked) {
-    //     console.log('Item added to cart successfully.');
-    //     await common.sleep(500);
-    //     let screenshot = await browser.page().screenshot();
-    //     fs.writeFileSync(`out/${params.pid}-${params.host}.png`, Buffer.from(screenshot, "base64"));
-    // } else {
-    //     console.log('Failed to find "Add to Cart" button.');
-    // }

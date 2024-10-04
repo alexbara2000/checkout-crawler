@@ -58,7 +58,7 @@ exports.readFileByLine = function (file) {
 };
 
 exports.sleep = function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise(resolve => setTimeout(resolve, 2*ms));
 };
 
 exports.timeout = function (promise, ms) {

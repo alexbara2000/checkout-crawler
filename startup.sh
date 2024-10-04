@@ -9,7 +9,7 @@ mkdir -p logs
 rm -f logs/$2*
 
 for i in `seq 0 $(($4 - 1))`; do
-    echo "$2 $i"
+    echo "$2 $1 $i"
     nice bash ./respawn.sh $1 $2 $3 $i $4 &
     sleep 1
 done

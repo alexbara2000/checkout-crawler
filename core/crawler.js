@@ -132,7 +132,7 @@ async function visit(params) {
         }
         //Only insert links at the end, when there were no errors and we do not want to reload the page any further
         //If manualQueue is enabled, also only if the module actually wants to queue them
-        else if (!options.manualQueue || duringResult.queueLinks) {
+        else if ((!options.manualQueue || duringResult.queueLinks) && !duringResult.pageFound) {
             await addUrls(links);
         }
 
