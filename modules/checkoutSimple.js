@@ -47,6 +47,10 @@ async function during(params) {
     let foundCheckout = false;
     page = browser.page();
     // await selectSize(page, params);
+    await common.sleep(2000);
+    // let screenshot = await browser.page().screenshot();
+    // fs.writeFileSync(`screenshots/page/${params.pid}-${params.host}.png`, Buffer.from(screenshot, "base64"));
+
     let numAddedToCart = await addToCart(page, params, 0);
     if(numAddedToCart > 0) {
         foundCheckout = await goToCheckout(page, params, 0);

@@ -6,7 +6,7 @@ if [[ $# -lt 3 ]] ; then
 fi
 
 mkdir -p logs
-rm -f logs/$2*
+# rm -f logs/$2*
 
 for i in `seq 0 $(($4 - 1))`; do
     echo "$2 $1 $i"
