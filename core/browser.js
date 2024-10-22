@@ -60,11 +60,11 @@ async function closePage() {
 async function goto(url, before) {
     await closePage();
     // generate a fingerprint
-    const fingerprint = await getBrowserfingerprint(uuid.v4());
+    // const fingerprint = await getBrowserfingerprint(uuid.v4());
     _page = await _context.newPage();
 
     // "cloak" our page with evasions
-    await cloak(_page, fingerprint);
+    // await cloak(_page, fingerprint);
 
 
     //Needs to be executed before the navigation, but after the new tab already exists

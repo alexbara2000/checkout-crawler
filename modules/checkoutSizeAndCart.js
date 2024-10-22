@@ -11,7 +11,7 @@ const options = {
         '--load-extension=consent-o-matic',]},
     context: {},
     crawler: {maxDepth: 3, maxLinks: 10, randomizeLinks: true, maxRetries: 2, sameSite: false, depthFirst: true,},
-    seed: {list: "top100.csv", pageLimit: 100000},
+    seed: {list: "top200Canada.csv", pageLimit: 100000},
 };
 
 module.exports = {
@@ -46,7 +46,7 @@ async function before(params) {
 async function during(params) {
     let foundCheckout = false;
     page = browser.page();
-    await common.sleep(2000);
+    await common.sleep(200);
     // let screenshot = await browser.page().screenshot();
     // fs.writeFileSync(`screenshots/page/${params.pid}-${params.host}.png`, Buffer.from(screenshot, "base64"));
 
