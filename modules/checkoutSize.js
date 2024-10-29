@@ -11,7 +11,7 @@ const options = {
         '--load-extension=consent-o-matic',]},
     context: {},
     crawler: {maxDepth: 3, maxLinks: 10, randomizeLinks: true, maxRetries: 2, sameSite: false, depthFirst: true,},
-    seed: {list: "top200Canada.csv", pageLimit: 100000},
+    seed: {list: "top118Canada.csv", pageLimit: 100000},
 };
 
 module.exports = {
