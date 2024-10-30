@@ -58,11 +58,11 @@ exports.readFileByLine = function (file) {
 };
 
 exports.sleep = function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, 2*ms));
+    return new Promise(resolve => setTimeout(resolve, 3*ms));
 };
 
 exports.timeout = function (promise, ms) {
-    return Promise.race([promise, exports.sleep(ms).then(() => {
+    return Promise.race([promise, exports.sleep(2*ms).then(() => {
         throw new Error("Timeout after " + ms + " ms");
     })]);
 };
