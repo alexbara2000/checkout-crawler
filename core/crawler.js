@@ -113,7 +113,7 @@ async function visit(params) {
         //Execute the modules
         duringResult = await callAll("during", params);
         //We need to extract links before closing the page, but do not insert them yet
-        const links = await extractLinks(params);
+        // const links = await extractLinks(params);
 
         //If needed, stop on the page for manual debugging before the tab is closed
         if (config.freeze) {
@@ -132,9 +132,9 @@ async function visit(params) {
         }
         //Only insert links at the end, when there were no errors and we do not want to reload the page any further
         //If manualQueue is enabled, also only if the module actually wants to queue them
-        else if ((!options.manualQueue || duringResult.queueLinks) && !duringResult.pageFound) {
-            await addUrls(links);
-        }
+        // else if ((!options.manualQueue || duringResult.queueLinks) && !duringResult.pageFound) {
+        //     await addUrls(links);
+        // }
 
         //Mark as crawled
         await db.query(
