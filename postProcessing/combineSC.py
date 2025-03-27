@@ -2,12 +2,13 @@ import os
 import sys
 from PIL import Image
 
-cart_screenshots = ["screenshots_shopify/checkout/cart/"+fileName for fileName in os.listdir("screenshots_shopify/checkout/cart")]
-simple_screenshots = ["screenshots_shopify/checkout/simple/"+fileName for fileName in  os.listdir("screenshots_shopify/checkout/simple")]
-size_screenshots = ["screenshots_shopify/checkout/size/"+fileName for fileName in  os.listdir("screenshots_shopify/checkout/size")]
-size_cart_screenshots = ["screenshots_shopify/checkout/size_and_cart/"+fileName for fileName in  os.listdir("screenshots_shopify/checkout/size_and_cart")]
+#cart_screenshots = ["screenshots_shopify/checkout/cart/"+fileName for fileName in os.listdir("screenshots_shopify/checkout/cart")]
+simple_screenshots = ["screenshots/checkout/simple/"+fileName for fileName in  os.listdir("screenshots/checkout/simple")]
+#size_screenshots = ["screenshots_shopify/checkout/size/"+fileName for fileName in  os.listdir("screenshots_shopify/checkout/size")]
+#size_cart_screenshots = ["screenshots_shopify/checkout/size_and_cart/"+fileName for fileName in  os.listdir("screenshots_shopify/checkout/size_and_cart")]
 
-all_screenshots = cart_screenshots+simple_screenshots+size_screenshots+size_cart_screenshots
+# all_screenshots = cart_screenshots+simple_screenshots+size_screenshots+size_cart_screenshots
+all_screenshots = simple_screenshots
 website_to_screenshots = {}
 
 for screenshot in all_screenshots:
@@ -28,5 +29,5 @@ for website, screenshots in website_to_screenshots.items():
     for im in images:
         new_im.paste(im, (0,y_offset))
         y_offset += im.size[1]
-    new_im.save('postProcessing/shopify1000Checkout/'+ website.replace(".","-")+".png")
+    new_im.save('postProcessing/shop1000CheckoutSimple/'+ website.replace(".","-")+".png")
 

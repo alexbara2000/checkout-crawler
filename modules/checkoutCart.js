@@ -49,7 +49,7 @@ const options = {
         hasTouch: true
     },
     crawler: {maxDepth: 3, maxLinks: 10, randomizeLinks: true, maxRetries: 2, sameSite: false, depthFirst: true,},
-    seed: {list: "refined_118_list.csv", pageLimit: 100000},
+    seed: {list: "top1000Shopify_refined.csv", pageLimit: 100000},
 };
 
 module.exports = {
