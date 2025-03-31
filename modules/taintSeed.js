@@ -50,7 +50,7 @@ const options = {
     }, crawler: {
         maxDepth: 1, maxLinks: 1, randomizeLinks: true, maxRetries: 2, sameSite: false, depthFirst: true,
     }, seed: {
-        list: "500_banks.csv", pageLimit: 100000
+        list: "analysis_sites.csv", pageLimit: 100000
     },
 };
 
