@@ -84,9 +84,7 @@ async function initialize() {
 async function before(params) {
     await browser.context().addInitScript(flowHandler);
     browser.context().exposeBinding("__crawler_taint_report", async function (source, value) {
-	console.log("Made it to 1");
         if (checkoutWasFound){
-	    console.log("Made it to 2");
             let finding = await enhance_finding(value);
             // await send_finding(params, Object.assign({errored: params.error !== undefined }, finding));
             if (finding.taint){

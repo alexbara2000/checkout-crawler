@@ -35,7 +35,7 @@ def filter_csv(csv_file, output_file, folder_path):
 
 if __name__ == "__main__":
     csv_file = "lists/top1000Shopify_refined.csv"  # Update with your actual CSV filename
-    folder_path = "postProcessing/shop1000CheckoutCart"  # Update with the actual folder containing images
+    folder_path = "postProcessing/shop1000CheckoutSize"  # Update with the actual folder containing images
     output_file = "tmp.csv"  # Output file
     
     filter_csv(csv_file, output_file, folder_path)
